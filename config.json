@@ -1,0 +1,19 @@
+{
+  "constraints" : "artifical_cencus.csv",
+  "microdata"   : "artifical_survay.csv",
+  "groups"      : "artificial_groups.csv",
+  "output"      : "artificial_synthetic_population.csv",
+  "validate"    : "artificial_synthPopSurvey.csv",
+  "initialTemp"      : 1000.0,
+  "minTemp"          : 0.001,
+  "coolingRate"      : 0.997,
+  "reheatFactor"     : 0.3,
+  "fitnessThreshold" : 0.01,
+  "minImprovement"   : 0.001,
+  "maxIterations"    : 500000,
+  "windowSize"       : 5000,
+  "change"           : 100000,
+  "distance"         : "NORM_EUCLIDEAN",
+  "useRandomSeed"    : "no",
+  "randomSeed"       : 42
+}
