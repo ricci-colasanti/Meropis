@@ -17,9 +17,12 @@ Generate statistically realistic **adult-only populations** with:
 - **Compatible relationships** based on multi-dimensional similarity metrics
 - **Mythical but deomgrapicaly realistic** geographic distributions of the island of Meropis
 
-## **Key Features**
 
-### **1.  Voronoi‑Based map generator**
+### Voronoi‑Based map generator
+### Artificial population generator
+### Save as Shape file
+
+## ** Voronoi‑Based map generator**
 Jupyter notebook `Voronoi-json.ipynb`.   
 
 This notebook creates a synthetic spatial dataset that mimics administrative regions (e.g., local‐authority zones) built from clustered points. It:
@@ -46,10 +49,9 @@ pip install numpy scipy matplotlib
 
 Adjust parameters (optional) at the top of the script:
 
-NUMBER_OF_POINTS: total number of seed points.
-create_clustered_points(... ) arguments: number of clusters, spread, and allowed centroid range.
-midpoint and radius: define the circular clipping region.
-
+ - NUMBER_OF_LOCAL_AREAS = 300
+ - NUMBER_OF_CITIES = 2
+ - NUMBER_OF_ADMIN_AREAS = 3
 
 
 
@@ -63,6 +65,7 @@ bounded_polygons.geojson appears in the working directory.
 
 
 ### 5. Output Structure (GeoJSON)
+OUTPUT_FILE = "bounded_polygons.geojson"   
 Each feature follows this schema:
 ```json
 {
@@ -93,3 +96,88 @@ Population model is a naïve Gaussian draw; replace with a demographic model if 
 The script assumes a unit square domain; scaling to other extents requires consistent transformation of all geometric entities.
 
 
+## Artificial population generator
+Jupyter notebook `ArtificialPopulation_dev.ipynb`
+
+### 1 Purpose
+The notebook builds a synthetic population model for a set of geographic areas (cities, agricultural zones, market towns). It generates individual‑level demographic records, assembles them into realistic households, and then derives aggregate census‑style statistics and a small survey sample. The workflow is fully reproducible and driven by configurable probability tables.
+
+### 2 Core Data Structures
+| Structure | What it Holds | Key Fields |
+| :--- | :--- | :--- |
+| **demographic_profiles** | Parameter sets for nine socioeconomic groups (e.g., `affluent_professional`, `student`, `retired`). | Means/std‑dev for age, education, income; race distribution; family‑formation propensity; household‑type probabilities; typical children. |
+| **area_types** | Composition of each geographic typology (`city`, `agricultural`, `market_town`). | Demographic mix, household‑type mix, urban flag, density, typical household size. |
+| **household_types** | Blueprint of six household categories (`single`, `couple`, `nuclear family`, `single‑parent`, `shared`, `multi‑generational`). | Human‑readable description + size‑distribution (probability of 1‑6 occupants). |
+| **Generated Individuals** | One dict per person. | `id`, `area`, `admin_area`, `demographic_id`, `age`, `education`, `gender`, `ethnicity`, `family_ratio`, `income`, plus household tracking fields (`in_household`, `household_id`, `relationship`). |
+| **Households** | One dict per household. | `hh_id`, `area_id`, `admin_area`, `urban`, `members` (list of person dicts), derived `size`. |
+
+### 3 Generation Pipeline
+
+#### **Base Population (`generate_individuals`)**
+- Uses a roulette‑wheel (cumulative probability) to draw a demographic profile for each person according to the area’s `demographic_distribution`.
+- Draws continuous attributes from normal distributions (`age`, `education`, `income`) and categorical attributes (`gender`, `ethnicity`) from the profile’s defined probabilities.
+
+#### **Household Formation (`create_area_population`)**
+- Repeatedly selects a head from the remaining pool.
+- Blends the head’s personal household‑type probabilities with the area‑level household distribution via `combine_probabilities` (simple Bayesian multiplication).
+- Chooses a household type and size using roulette‑wheel sampling on the resulting distributions.
+- Depending on the type, calls one of three helper routines:
+  - `couple` – finds a compatible partner (heterosexual bias, similarity scoring).
+  - `shared_household` – fills a non‑romantic house with similar adults.
+  - `multi_generational` – adds a partner then older relatives.
+- Updates each person’s `in_household`, `relationship`, and `household_id`.
+
+#### **Census Summary (`calculate_census`)**
+Walks every household to compute:
+- Total population, urban vs. rural household counts.
+- Household‑size histogram (1, 2, 3, 4+).
+- Age‑by‑gender buckets (0‑30, 30‑60, >60).
+- Education tier counts (non‑educated, low, middle, high).
+
+#### **Survey Sample**
+- Randomly selects **1 %** of households (`survay`).
+- For each sampled household, `calculate_survey` produces the same set of aggregates as the full census, while also preserving the raw member list.
+
+#### **Export**
+Helper `dicts_to_csv` writes three CSV files:
+1.  `artifical_cencus.csv` – census aggregates per area.
+2.  `artifical_population.csv` – flat list of all generated individuals.
+3.  `artifical_survay.csv` – survey‑level aggregates.
+4.  `compleate_artifical_individual_survey.csv` – raw individuals from the survey sample.
+
+### 4 Key Algorithms
+| Algorithm | Role | Highlights |
+| :--- | :--- | :--- |
+| **Roulette‑Wheel Sampling** | Random selection proportional to defined probabilities (demographics, household types, size). | Simple cumulative‑sum approach; deterministic once the RNG seed (`np.random.default_rng(seed=42)`) is set. |
+| **Similarity Scoring (`calculate_similarity_score`)** | Determines partner compatibility for `couple`‑type households. | Weighted combination of age, education, income (log‑scaled), ethnicity, and demographic profile similarity. Includes a **90 % hetero bias**. |
+| **Non‑Gender Similarity (`calculate_similarity_score_non_gender`)** | Used for `shared_household` matching where gender is irrelevant. | Same weighted factors but without the gender filter. |
+| **Bayesian Blending (`combine_probabilities`)** | Merges individual‑level and area‑level household probabilities. | Multiplication followed by renormalisation; falls back to uniform distribution if all products are zero. |
+
+### 5 Execution Flow (Top‑Level Script)
+```python
+with open("bounded_polygons.geojson") as f:
+    geojson_obj = json.load(f)
+
+for each feature in geojson_obj["features"]:
+    # 1. Resolve area type & urban flag
+    # 2. Generate individuals & households via create_area_population(...)
+    # 3. Derive census stats with calculate_census(...)
+    # 4. Accumulate global lists (population, households, census)
+
+### Export CSVs
+dicts_to_csv(census, "artifical_cencus.csv")
+dicts_to_csv(population, "artifical_population.csv")
+```
+
+
+### 6 Limitations & Assumptions
+
+- **Static Distributions** – All probabilities are hard‑coded; real‑world calibration would require external data sources.
+- **Simplified Ethnicity Handling** – Uses cumulative probabilities but stores ethnicity as an integer index only.
+- **Gender Bias** – A 90 % heterosexual assumption is baked into `calculate_similarity_score`; this can be toggled if needed.
+- **No Spatial Interaction** – Households are formed purely from the pool of individuals within an area; cross‑area commuting or migration is not modeled.
+- **Age/Education Bounds** – Generated values are not explicitly clamped beyond the normal distribution; extreme outliers may appear.
+
+
+## Save to Shape
+The notebook: `geopandas_to_shape.ipynb` will load the geojson file and save it as Shape files in the folder

@@ -20,6 +20,7 @@ Generate statistically realistic **adult-only populations** with:
 
 ### Voronoi‑Based map generator
 ### Artificial population generator
+### Save as Shape file
 
 ## ** Voronoi‑Based map generator**
 Jupyter notebook `Voronoi-json.ipynb`.   
@@ -176,3 +177,7 @@ dicts_to_csv(population, "artifical_population.csv")
 - **Gender Bias** – A 90 % heterosexual assumption is baked into `calculate_similarity_score`; this can be toggled if needed.
 - **No Spatial Interaction** – Households are formed purely from the pool of individuals within an area; cross‑area commuting or migration is not modeled.
 - **Age/Education Bounds** – Generated values are not explicitly clamped beyond the normal distribution; extreme outliers may appear.
+
+
+## Save to Shape
+The notebook: `geopandas_to_shape.ipynb` will load the geojson file and save it as Shape files in the folder
